@@ -1,0 +1,52 @@
+name: scan
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+concurrency:
+  group: scan
+  cancel-in-progress: false
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.22.2"
+      - name: Restore saved data
+        run: |
+          mkdir -p state
+          git fetch --depth=1 origin data && git archive FETCH_HEAD | tar -x -C state || echo "no saved data yet"
+      - name: Scan
+        env:
+          DB_PATH: state/scanner.db
+          SITE_DIR: public
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: node scan-once.ts
+      - name: Build site
+        run: |
+          cp index.html app.js manifest.webmanifest public/
+          sed -i 's#"/api/\([a-z]*\)"#"data/\1.json"#g' public/app.js
+          sed -i 's#"/app.js"#"app.js"#; s#"/manifest.webmanifest"#"manifest.webmanifest"#' public/index.html
+          sed -i 's#"start_url": "/"#"start_url": "./"#' public/manifest.webmanifest
+      - name: Save data
+        run: |
+          cd state
+          git init -q -b data
+          git add -A
+          git -c user.name=scanner -c user.email=scanner@users.noreply.github.com commit -qm state
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" data
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+      - id: deploy
+        uses: actions/deploy-pages@v4
