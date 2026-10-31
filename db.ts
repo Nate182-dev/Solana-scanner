@@ -46,14 +46,14 @@ export function listTokens(db: Db, now = Date.now()) {
     (SELECT data FROM assessments WHERE address=t.address ORDER BY id DESC LIMIT 1) asmt
     FROM tokens t ORDER BY t.first_seen DESC LIMIT 400`).all() as any[];
   return rows.map(r => ({ address: r.address, firstSeen: r.first_seen, pairCreatedAt: r.pair_created_at, snapshot: JSON.parse(r.snap) as Metrics, assessment: JSON.parse(r.asmt) as Assessment }))
-    .filter(t => now - t.snapshot.observedAt < ACTIVE_MS && (now - t.firstSeen < ACTIVE_MS || (t.assessment.recommendation !== "AVOID" && t.assessment.score >= 50)));
+    .filter(t => now - t.snapshot.observedAt < ACTIVE_MS && (now - t.firstSeen < ACTIVE_MS || (t.assessment.recommendation !== "AVOID" && t.assessment.score >= 50))).map(t => ({ ...t, history: history(db, t.address) }));
 }
 export function getStatus(db: Db, everyMs: number, now = Date.now()) {
   const p: any = db.prepare("SELECT * FROM provider_status WHERE name='dexscreener'").get() ?? {};
   const toks = listTokens(db, now);
   const x: any = db.prepare("SELECT * FROM provider_status WHERE name='x'").get() ?? {};
   const rr: any = db.prepare("SELECT * FROM provider_status WHERE name='solana-rpc'").get() ?? {};
-  return { rpcLastOk: rr.last_ok ?? null, rpcLastError: rr.last_error ?? null, xLastOk: x.last_ok ?? null, xLastError: x.last_error ?? null, lastOk: p.last_ok ?? null, lastError: p.last_error ?? null, lastErrorAt: p.last_error_at ?? null,
+  return { rpcLastOk: rr.last_ok ?? null, rpcLastError: rr.last_error ?? null, rpcLastErrorAt: rr.last_error_at ?? null, xLastOk: x.last_ok ?? null, xLastError: x.last_error ?? null, lastOk: p.last_ok ?? null, lastError: p.last_error ?? null, lastErrorAt: p.last_error_at ?? null,
     stale: !p.last_ok || now - p.last_ok > 3 * everyMs, monitored: toks.length,
     discovered24h: toks.filter(t => now - t.firstSeen < 86_400_000).length,
     excluded: toks.filter(t => t.assessment.exclusions.length > 0).length };
@@ -81,3 +81,9 @@ export const openPredictionAddresses = (db: Db, since: number, limit = 150): str
   (db.prepare("SELECT DISTINCT address FROM predictions WHERE discovered_at > ? LIMIT ?").all(since, limit) as any[]).map(r => r.address);
 export function getSecurity(db: Db, address: string): Security | null { const r: any = db.prepare("SELECT data FROM security WHERE address=?").get(address); return r ? JSON.parse(r.data) : null; }
 export function saveSecurity(db: Db, address: string, s: Security) { db.prepare("INSERT OR REPLACE INTO security(address,checked_at,data) VALUES(?,?,?)").run(address, s.checkedAt, JSON.stringify(s)); }
+function history(db: Db, address: string) { // what THIS scanner actually observed (not full market history)
+  const s = db.prepare("SELECT data FROM snapshots WHERE address=? ORDER BY id DESC LIMIT 48").all(address) as any[];
+  const a = db.prepare("SELECT assessed_at, data FROM assessments WHERE address=? ORDER BY id DESC LIMIT 48").all(address) as any[];
+  return { points: s.reverse().map(r => { const m = JSON.parse(r.data); return [m.observedAt, m.priceUsd, m.liquidityUsd, m.volume1h]; }),
+    scores: a.reverse().map(r => [r.assessed_at, JSON.parse(r.data).score]) };
+}

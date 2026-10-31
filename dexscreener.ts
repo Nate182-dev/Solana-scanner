@@ -6,7 +6,8 @@ const n = (x: unknown): number | null => { const v = typeof x === "string" ? Num
 
 export function parsePair(p: any, observedAt: number): (Metrics & { address: string }) | null {
   if (!p || p.chainId !== "solana" || !isSolAddress(p.baseToken?.address ?? "")) return null;
-  return { address: p.baseToken.address, observedAt, source: "dexscreener", symbol: String(p.baseToken?.symbol ?? "").slice(0, 24) || null, name: String(p.baseToken?.name ?? "").slice(0, 48) || null, pairCreatedAt: n(p.pairCreatedAt),
+  return { address: p.baseToken.address, observedAt, source: "dexscreener", pairAddress: isSolAddress(p.pairAddress ?? "") ? p.pairAddress : null,
+    imageUrl: typeof p.info?.imageUrl === "string" && /^https:\/\/[^\s"'<>]{4,280}$/.test(p.info.imageUrl) ? p.info.imageUrl : null, marketCapUsd: n(p.marketCap) ?? n(p.fdv), symbol: String(p.baseToken?.symbol ?? "").slice(0, 24) || null, name: String(p.baseToken?.name ?? "").slice(0, 48) || null, pairCreatedAt: n(p.pairCreatedAt),
     priceUsd: n(p.priceUsd), liquidityUsd: n(p.liquidity?.usd), volume5m: n(p.volume?.m5), volume1h: n(p.volume?.h1),
     buys1h: n(p.txns?.h1?.buys), sells1h: n(p.txns?.h1?.sells), priceChange5m: n(p.priceChange?.m5), priceChange1h: n(p.priceChange?.h1) };
 }

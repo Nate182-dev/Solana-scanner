@@ -16,7 +16,7 @@ const web = (f: string) => readFileSync(new URL(`./${f}`, import.meta.url));
 const FILES: Record<string, [string, Buffer]> = {
   "/": ["text/html; charset=utf-8", web("index.html")], "/app.js": ["text/javascript", web("app.js")],
   "/manifest.webmanifest": ["application/manifest+json", web("manifest.webmanifest")] };
-const SEC = { "Content-Security-Policy": "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; connect-src 'self'; manifest-src 'self'; base-uri 'none'; frame-ancestors 'none'",
+const SEC = { "Content-Security-Policy": "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self' https: data:; frame-src https://dexscreener.com; manifest-src 'self'; base-uri 'none'; frame-ancestors 'none'",
   "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer" };
 const json = (res: ServerResponse, body: unknown) => res.writeHead(200, { ...SEC, "Content-Type": "application/json", "Cache-Control": "no-store" }).end(JSON.stringify(body));
 

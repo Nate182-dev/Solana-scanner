@@ -7,7 +7,7 @@ export interface Metrics {
   buys1h: number | null; sells1h: number | null;
   priceChange5m: number | null; priceChange1h: number | null;
   source: string;
-  symbol?: string | null; name?: string | null; // untrusted text: always escape when displaying
+  symbol?: string | null; name?: string | null; imageUrl?: string | null; pairAddress?: string | null; marketCapUsd?: number | null; // untrusted text: always escape when displaying
 }
 export interface Social { recent: number; baselineAvg: number; total: number; observedAt: number; source: "x" }
 export interface Security { mintAuthority: string | null; freezeAuthority: string | null; supply: number | null; program: string; extensions: string[]; top1Pct: number | null; top10Pct: number | null; checkedAt: number; source: "solana-rpc" }
