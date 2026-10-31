@@ -6,7 +6,7 @@ const ago = t => { const m = Math.round((Date.now() - t) / 60000); return m < 1 
 let tokens = [], hideAvoid = false;
 function status(s) {
   const el = $("#status");
-  const bad = s.stale; el.className = bad ? "bad" : "";
+  const bad = s.stale || !s.lastOk || Date.now() - s.lastOk > 30 * 60000; // also catches a stopped scheduler el.className = bad ? "bad" : "";
   el.textContent = (s.lastOk ? (bad ? "STALE DATA: last good scan " : "Live: last good scan ") + ago(s.lastOk) : "OFFLINE: no successful scan yet") +
     ` · ${s.monitored} monitored · ${s.discovered24h} found in 24h · ${s.excluded} excluded by safety filters` + (s.xEnabled ? " · X attention: on" : " · X attention: off") + (s.telegramEnabled ? " · Telegram: on" : "") + (s.lastError ? ` · Last error: ${s.lastError}` : "");
 }
