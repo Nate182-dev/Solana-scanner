@@ -10,6 +10,7 @@ export interface Metrics {
   symbol?: string | null; name?: string | null; // untrusted text: always escape when displaying
 }
 export interface Social { recent: number; baselineAvg: number; total: number; observedAt: number; source: "x" }
+export interface Security { mintAuthority: string | null; freezeAuthority: string | null; supply: number | null; program: string; extensions: string[]; top1Pct: number | null; top10Pct: number | null; checkedAt: number; source: "solana-rpc" }
 export type Risk = "LOWER RELATIVE RISK" | "MODERATE RISK" | "HIGH RISK" | "EXTREME RISK" | "INSUFFICIENT DATA";
 export type Rec = "WATCH" | "POTENTIAL OPPORTUNITY" | "WAIT FOR CONFIRMATION" | "AVOID" | "INSUFFICIENT DATA";
 export interface Component { name: string; points: number; max: number; available: boolean; note: string }

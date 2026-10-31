@@ -10,6 +10,8 @@ export function candidateOk(a: Assessment, m: Metrics, c: AlertCfg) {
   return a.exclusions.length === 0 && a.risk !== "INSUFFICIENT DATA" && RISKS.indexOf(a.risk) <= RISKS.indexOf(c.maxRisk) && a.score >= c.minScore
     && (m.liquidityUsd ?? 0) >= c.minLiquidityUsd && CONF.indexOf(a.confidence) >= CONF.indexOf(c.minConfidence);
 }
+// Cheap pre-check so paid/limited lookups (X, RPC) only run for tokens that already look worth a closer look.
+export const worthChecking = (a: Assessment, m: Metrics, c: AlertCfg) => a.exclusions.length === 0 && a.score >= c.minScore && (m.liquidityUsd ?? 0) >= c.minLiquidityUsd;
 type Snap = { a: Assessment; m: Metrics };
 // Opportunity alerts need a passing candidate. Warning alerts only fire for tokens we already alerted on ("watched"), to limit noise.
 export function evaluate(cur: Snap & { address: string }, prev: Snap | null, watched: boolean, c: AlertCfg): { type: AlertType; message: string }[] {

@@ -1,4 +1,4 @@
-import type { Assessment, Component, Metrics, Rec, Risk, Social } from "./types.ts";
+import type { Assessment, Component, Metrics, Rec, Risk, Security, Social } from "./types.ts";
 import { FILTERS, MODEL_VERSION, WEIGHTS } from "./config.ts";
 
 const clamp = (x: number, lo = 0, hi = 1) => Math.min(hi, Math.max(lo, x));
@@ -7,7 +7,7 @@ const num = (x: number | null | undefined): x is number => typeof x === "number"
 const C = (name: string, max: number, pts: number | null, note: string): Component =>
   ({ name, max, points: pts === null ? 0 : Math.round(pts * max * 10) / 10, available: pts !== null, note });
 
-export function assess(m: Metrics, prev: Metrics | null, now = Date.now(), W = WEIGHTS, F = FILTERS, social: Social | null = null): Assessment {
+export function assess(m: Metrics, prev: Metrics | null, now = Date.now(), W = WEIGHTS, F = FILTERS, social: Social | null = null, security: Security | null = null): Assessment {
   const exclusions: string[] = [], redFlags: string[] = [], limitations: string[] = [];
   const age = now - m.observedAt, stale = age > F.maxStaleMs;
   if (stale) exclusions.push(`Data is ${Math.round(age / 60000)} min old (limit ${F.maxStaleMs / 60000} min). Verified fact.`);
@@ -25,6 +25,18 @@ export function assess(m: Metrics, prev: Metrics | null, now = Date.now(), W = W
   if (liqCollapse) redFlags.push(`Liquidity fell ${(liqDrop! * 100).toFixed(0)}% since the last snapshot (verified from our records).`);
   if (num(m.liquidityUsd) && m.liquidityUsd < F.minLiquidityUsd) exclusions.push(`Liquidity $${Math.round(m.liquidityUsd)} is below the $${F.minLiquidityUsd} minimum. Verified fact.`);
 
+  const hs = security && num(security.top10Pct) ? security : null;
+  const RISKY_EXT = ["permanentDelegate", "transferHook", "pausableConfig", "nonTransferable", "defaultAccountState"]; // verify names against Solana docs
+  const riskyExt = security ? security.extensions.filter(x => RISKY_EXT.includes(x)) : [];
+  const secBad = !!security && (security.mintAuthority !== null || security.freezeAuthority !== null || riskyExt.length > 0);
+  if (security) {
+    if (F.excludeActiveMint && security.mintAuthority) exclusions.push("Mint authority is active: the creator can create unlimited new tokens. Verified on-chain.");
+    if (F.excludeActiveFreeze && security.freezeAuthority) exclusions.push("Freeze authority is active: the creator can freeze holders' tokens. Verified on-chain.");
+    if (riskyExt.length) exclusions.push(`Token uses risky Token-2022 features (${riskyExt.join(", ")}). Verified on-chain.`);
+    if (security.extensions.includes("transferFeeConfig")) redFlags.push("Token charges a fee on every transfer (verified on-chain); check how high it is.");
+  }
+  const bigHolder = !!hs && num(hs.top1Pct) && hs.top1Pct > 50;
+  if (bigHolder) redFlags.push(`One account holds ${hs!.top1Pct}% of supply. It may be the liquidity pool, so this is a warning, not proof.`);
   const txns = num(m.buys1h) && num(m.sells1h) ? m.buys1h + m.sells1h : null;
   const partPts = txns === null ? null : txns === 0 ? 0 : clamp(txns / 200) * 0.6 + clamp((m.buys1h! / txns - 0.5) / 0.2) * 0.4;
   const components: Component[] = [
@@ -37,8 +49,10 @@ export function assess(m: Metrics, prev: Metrics | null, now = Date.now(), W = W
       !num(m.priceChange1h) ? "Price change missing" : `1h ${m.priceChange1h}%, 5m ${m.priceChange5m}% (halved unless volume confirms)`),
     C("Liquidity quality", W.liquidity, !num(m.liquidityUsd) ? null : liqCollapse ? 0 : clamp(m.liquidityUsd / 100_000),
       !num(m.liquidityUsd) ? "Liquidity missing" : `$${Math.round(m.liquidityUsd)} reported liquidity (not all of it is tradable at the shown price)`),
-    C("Holder distribution", W.holders, null, "No holder data source connected yet - not assessed"),
-    C("Token security", W.security, null, "No on-chain security check connected yet - not assessed"),
+    C("Holder distribution", W.holders, hs ? clamp((80 - hs.top10Pct!) / 50) : null,
+      hs ? `Top 10 accounts hold ${hs.top10Pct}% (largest ${hs.top1Pct}%). This can include the liquidity pool, so real concentration may be lower` : "No holder data (not fetched or unavailable) - not assessed"),
+    C("Token security", W.security, security ? (secBad ? 0 : 0.7) : null,
+      security ? (secBad ? "Serious token-control problem found (see warnings)" : "Mint and freeze authority are off. This removes two common scam methods but does NOT make a token safe, so this category is capped at 70%") : "No on-chain security check for this token (not fetched or unavailable) - not assessed"),
     C("Market attention", W.attention, social ? clamp(social.recent / 20) * 0.5 + clamp((social.recent / Math.max(social.baselineAvg, 1) - 1) / 3) * 0.5 : null,
       social ? `${social.recent} X posts mentioning the token address in the latest hour vs ~${social.baselineAvg.toFixed(1)}/h before (posts, not people; bots and paid shilling count too)` : "No X data for this token (not fetched or unavailable) - not assessed"),
   ];
@@ -51,7 +65,8 @@ export function assess(m: Metrics, prev: Metrics | null, now = Date.now(), W = W
   let rp = 0;
   if (num(m.liquidityUsd)) rp += m.liquidityUsd < F.minLiquidityUsd ? 3 : m.liquidityUsd < F.lowLiquidityUsd ? 2 : 0;
   if (extreme) rp += 2; if (wash) rp += 2; if (liqCollapse) rp += 3; if (stale) rp += 2;
-  if (!components[4].available && !components[5].available) rp += 2; // unknown is never "safe"
+  rp += (components[4].available ? 0 : 1) + (components[5].available ? 0 : 1); // unknown is never "safe"
+  if (secBad) rp += 3; if (bigHolder) rp += 1;
   const risk: Risk = !num(m.liquidityUsd) || !num(m.priceUsd) ? "INSUFFICIENT DATA"
     : rp >= 6 ? "EXTREME RISK" : rp >= 4 ? "HIGH RISK" : rp >= 2 ? "MODERATE RISK" : "LOWER RELATIVE RISK";
 

@@ -1,6 +1,7 @@
 import { createServer } from "node:http";
 import { readFileSync } from "node:fs";
 import type { ServerResponse } from "node:http";
+import { rpcClient } from "./security.ts";
 import { report } from "./paper.ts";
 import { getStatus, listAlerts, listTokens, openDb } from "./db.ts";
 import { telegramNotifier } from "./notify.ts";
@@ -8,7 +9,7 @@ import { DailyBudget, xClient } from "./x.ts";
 import { dexProvider, scanOnce } from "./scan.ts";
 
 const db = openDb();
-const OPTS = { notify: telegramNotifier(), x: xClient(), budget: new DailyBudget(Number(process.env.X_MAX_CALLS_PER_DAY ?? 100)) };
+const OPTS = { rpc: rpcClient(), notify: telegramNotifier(), x: xClient(), budget: new DailyBudget(Number(process.env.X_MAX_CALLS_PER_DAY ?? 100)) };
 const PORT = Number(process.env.PORT ?? 3000);
 const EVERY = Number(process.env.SCAN_SECONDS ?? 120) * 1000;
 const web = (f: string) => readFileSync(new URL(`./${f}`, import.meta.url));

@@ -1,5 +1,5 @@
 import { DatabaseSync } from "node:sqlite"; // built into Node 22: no install needed
-import type { Assessment, Metrics } from "./types.ts";
+import type { Assessment, Metrics, Security } from "./types.ts";
 
 export function openDb(path = process.env.DB_PATH ?? "scanner.db") {
   const db = new DatabaseSync(path);
@@ -13,7 +13,8 @@ export function openDb(path = process.env.DB_PATH ?? "scanner.db") {
   CREATE TABLE IF NOT EXISTS alerts(id INTEGER PRIMARY KEY AUTOINCREMENT, address TEXT NOT NULL, type TEXT NOT NULL, created_at INTEGER NOT NULL, message TEXT NOT NULL, delivered INTEGER NOT NULL DEFAULT 0);
   CREATE INDEX IF NOT EXISTS alert_addr ON alerts(address, type, created_at);
   CREATE TABLE IF NOT EXISTS predictions(id INTEGER PRIMARY KEY AUTOINCREMENT, address TEXT NOT NULL, kind TEXT NOT NULL, discovered_at INTEGER NOT NULL, price_usd REAL, liquidity_usd REAL,
-    score INTEGER NOT NULL, risk TEXT NOT NULL, recommendation TEXT NOT NULL, confidence TEXT NOT NULL, model_version TEXT NOT NULL, UNIQUE(address, kind));`);
+    score INTEGER NOT NULL, risk TEXT NOT NULL, recommendation TEXT NOT NULL, confidence TEXT NOT NULL, model_version TEXT NOT NULL, UNIQUE(address, kind));
+  CREATE TABLE IF NOT EXISTS security(address TEXT PRIMARY KEY, checked_at INTEGER NOT NULL, data TEXT NOT NULL);`);
   return db;
 }
 export type Db = ReturnType<typeof openDb>;
@@ -51,7 +52,8 @@ export function getStatus(db: Db, everyMs: number, now = Date.now()) {
   const p: any = db.prepare("SELECT * FROM provider_status WHERE name='dexscreener'").get() ?? {};
   const toks = listTokens(db, now);
   const x: any = db.prepare("SELECT * FROM provider_status WHERE name='x'").get() ?? {};
-  return { xLastOk: x.last_ok ?? null, xLastError: x.last_error ?? null, lastOk: p.last_ok ?? null, lastError: p.last_error ?? null, lastErrorAt: p.last_error_at ?? null,
+  const rr: any = db.prepare("SELECT * FROM provider_status WHERE name='solana-rpc'").get() ?? {};
+  return { rpcLastOk: rr.last_ok ?? null, rpcLastError: rr.last_error ?? null, xLastOk: x.last_ok ?? null, xLastError: x.last_error ?? null, lastOk: p.last_ok ?? null, lastError: p.last_error ?? null, lastErrorAt: p.last_error_at ?? null,
     stale: !p.last_ok || now - p.last_ok > 3 * everyMs, monitored: toks.length,
     discovered24h: toks.filter(t => now - t.firstSeen < 86_400_000).length,
     excluded: toks.filter(t => t.assessment.exclusions.length > 0).length };
@@ -77,3 +79,5 @@ export function recordPrediction(db: Db, address: string, kind: "discovery" | "a
 // Keep re-checking tokens with an unfinished paper record, even after they leave the active feed.
 export const openPredictionAddresses = (db: Db, since: number, limit = 150): string[] =>
   (db.prepare("SELECT DISTINCT address FROM predictions WHERE discovered_at > ? LIMIT ?").all(since, limit) as any[]).map(r => r.address);
+export function getSecurity(db: Db, address: string): Security | null { const r: any = db.prepare("SELECT data FROM security WHERE address=?").get(address); return r ? JSON.parse(r.data) : null; }
+export function saveSecurity(db: Db, address: string, s: Security) { db.prepare("INSERT OR REPLACE INTO security(address,checked_at,data) VALUES(?,?,?)").run(address, s.checkedAt, JSON.stringify(s)); }

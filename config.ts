@@ -2,7 +2,7 @@ export const MODEL_VERSION = "0.1.0";
 // Weights follow the spec (total 100). Configurable: pass your own object to assess().
 export const WEIGHTS = { volume: 20, participation: 15, momentum: 15, liquidity: 15, holders: 10, security: 15, attention: 10 };
 // Conservative starting points, NOT universal truths. Tune them using paper-performance results.
-export const FILTERS = { minLiquidityUsd: 10_000, lowLiquidityUsd: 25_000, maxStaleMs: 5 * 60_000, maxChange1hPct: 500, maxVolToLiq: 20, liqDropPct: 0.3 };
+export const FILTERS = { minLiquidityUsd: 10_000, lowLiquidityUsd: 25_000, maxStaleMs: 5 * 60_000, maxChange1hPct: 500, maxVolToLiq: 20, liqDropPct: 0.3, excludeActiveMint: true, excludeActiveFreeze: true };
 
 import type { AlertCfg } from "./alerts.ts";
 const e = (k: string, d: number) => { const v = process.env[k]; return v !== undefined && v !== "" && Number.isFinite(Number(v)) ? Number(v) : d; };

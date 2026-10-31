@@ -8,7 +8,7 @@ function status(s) {
   const el = $("#status");
   const bad = s.stale || !s.lastOk || Date.now() - s.lastOk > 30 * 60000; // also catches a stopped scheduler el.className = bad ? "bad" : "";
   el.textContent = (s.lastOk ? (bad ? "STALE DATA: last good scan " : "Live: last good scan ") + ago(s.lastOk) : "OFFLINE: no successful scan yet") +
-    ` · ${s.monitored} monitored · ${s.discovered24h} found in 24h · ${s.excluded} excluded by safety filters` + (s.xEnabled ? " · X attention: on" : " · X attention: off") + (s.telegramEnabled ? " · Telegram: on" : "") + (s.lastError ? ` · Last error: ${s.lastError}` : "");
+    ` · ${s.monitored} monitored · ${s.discovered24h} found in 24h · ${s.excluded} excluded by safety filters` + (s.xEnabled ? " · X attention: on" : " · X attention: off") + (s.telegramEnabled ? " · Telegram: on" : "") + (s.rpcLastError ? " · Safety-check problem: " + s.rpcLastError : "") + (s.lastError ? ` · Last error: ${s.lastError}` : "");
 }
 function render() {
   const k = $("#sort").value;
